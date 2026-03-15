@@ -1,0 +1,12 @@
+name = "FreeSubgroups"
+uuid = "1f64ceb7-f594-4beb-a969-186b5f13dd67"
+version = "0.1.0"
+authors = ["Tommy Hofmann <thofma@gmail.com>"]
+
+[deps]
+Oscar = "f1435218-dba5-11e9-1e4d-f1a5fab5fc13"
+Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
+
+[compat]
+Oscar = "1.7.0"
+Reexport = "1.2.2"
