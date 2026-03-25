@@ -132,7 +132,10 @@ function _eigenspaces(x, Qq, ev, i0)
   U1 = reduce(vcat, [kernel((xq - ev[i]*Iq); side = :left) for i in i0 + 1:d])
   #@info nrows(U)
   #@info nrows(U1)
-  @assert nrows(U) + nrows(U1) == d
+  if nrows(U) + nrows(U1) < d
+    throw(LowPrecision())
+  end
+  @assert nrows(U) + nrows(U1) == ncols(U)
   return U, U1
 end
 
@@ -172,10 +175,13 @@ function compute_delta(x, b, p; prec)
   @assert fl
   #@info "" i0
   Ux, Ux1 = _eigenspaces(x, Qq, eigvalsx, i0)
+  @assert nrows(Ux) + nrows(Ux1) == d
   xm1 = inv(x)
+  #@info iszero.(eigvalsx)
   eigvalsm1 = [inv(e) for e in reverse(eigvalsx)]
   @assert issorted(eigvalsm1, by = abs_val, rev = true)
   Uxm1, Uxm11 = _eigenspaces(xm1, Qq, eigvalsm1, i0)
+  @assert nrows(Uxm1) + nrows(Uxm11) == d
   #@info "i0", i0
   bb = matrix(b)
   Uxb = Ux * bb
@@ -299,11 +305,13 @@ function version3(G; min_word_length = 1, max_word_length = 10, number_good = 1,
       b = map_word(rand_pseudo(Q; radius = max_word_length), _gens)
       y = x^b
       bound = compute_bound(x, b, p);
-      return x, b, bound
+      return bound, (x, b)
     end
     return mat, p
   end
 end
+
+padic_algorithm(G; kw...) = version3(G; kw...)
 
 function _root_valuations(f, p)
   #@info f

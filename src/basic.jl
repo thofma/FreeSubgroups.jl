@@ -1,6 +1,8 @@
 function _random_element(G; radius = 5)
     F = free_group(ngens(G))
-    return G(matrix(map_word(rand_pseudo(F; radius), gens(G))); check = false)
+    r = rand(1:radius)
+    w = rand_pseudo(F; radius = r)
+    return G(matrix(map_word(w, gens(G))); check = false), w
 end
 
 function _random_element_glnZ(n)

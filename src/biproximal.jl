@@ -26,7 +26,6 @@ function Oscar.roots(CC::ComplexField, g::PolyRingElem{<: EmbeddedNumFieldElem})
   return CC.(r)
 end
 
-
 function is_semisimple_biproximal(g::MatElem)
   CC = complex_field()
   d = nrows(g)
@@ -56,11 +55,11 @@ function is_semisimple_biproximal(g::MatElem)
     end
     rabs = abs.(r)
     # we need to make sure that no two intervals overlap
-    if any(x -> !(x[1] == x[2]) && overlaps(x[1], x[2]), zip(rabs, rabs))
-      # we cannot distinguish between "not enough precision" and
-      # "there are two distinct eigenvalues with the same absolute value"
-      break
-    end
+    #if any(x -> !(x[1] == x[2]) && overlaps(x[1], x[2]), zip(rabs, rabs))
+    #  # we cannot distinguish between "not enough precision" and
+    #  # "there are two distinct eigenvalues with the same absolute value"
+    #  break
+    #end
     sort!(r; by = abs, rev = true )
     if ((abs(r[1]) > abs(r[2])) && (abs(r[d-1]) > abs(r[d]))) 
       set_precision!(Balls, oldprec)
@@ -164,7 +163,8 @@ end
 # z = -4*log(delta)
 
 function alpha1_and_a1(eigs)
-  return abs(eigs[1]/eigs[2]), abs(eigs[1])
+  CC = complex_field()
+  return abs(CC(eigs[1])/CC(eigs[2])), abs(CC(eigs[1]))
 end
 
 function Ebound(d, delta, lambdas::Vector)
@@ -178,7 +178,12 @@ function Ebound(d, delta, lambdas::Vector)
   return 2*num/den
 end
 
-function can_compute_bound(x, y)
+function can_compute_biproximal_bound(x, y; check::Bool = true)
+  if check
+    if !is_semisimple_biproximal(x) || !is_semisimple_biproximal(y)
+      error("elements must be semisimple-biproximal")
+    end
+  end
   RR = real_field()
 
   d = nrows(x)
@@ -186,15 +191,16 @@ function can_compute_bound(x, y)
   oldprec = precision(Balls)
   # compute delta with "high precision"
   # if not positive, we bail out
-  set_precision!(Balls, 64)
+  set_precision!(Balls, 1064)
   del, ex, eX, ey, eY = delta(x, y)
+  #@info del
   if !is_positive(del)
     set_precision!(Balls, oldprec)
     return false, -1
   end
 
   oldprec = precision(Balls)
-  prec = 32
+  prec = 64
   while true
     if prec > 2^10
       @error "something off"
@@ -207,6 +213,7 @@ function can_compute_bound(x, y)
     #println("compute bounds")
     pp = []
     for e in [ex, eX, ey, eY]
+      #@info eX
       push!(pp, Ebound(d, del, e))
     end
     pp = reduce(max, pp)
@@ -218,35 +225,59 @@ function can_compute_bound(x, y)
   end
 end
 
+biproximal_bound(x, y) = biproximal_bound(matrix(x), matrix(y))
+
+function biproximal_bound(x::MatElem, y::MatElem)
+  fl, l = can_compute_biproximal_bound(x, y)
+  if !fl
+    error("Could not verify that delta(x, y) is positive")
+  end
+  return l
+end
+
 # need to tweak the search
-function biproximal_algorithm(G::MatrixGroup)
-  stabbound = 10
-  stab = 0
+function biproximal_algorithm(G::MatrixGroup; stab = 5, startrad)
+  stabbound = stab
+  _stab = 0
   k = 0
-  currad = 1
+  currad = startrad
   best_E = typemax(Int)
+  best_EE = 0
   best_pair = (one(G), one(G))
+  best_word = nothing
+  @info "Increasing radius to $(currad)"
   while true
-    if stab >= stabbound
-      return best_E, best_pair
+    if _stab >= stabbound
+      return best_EE, best_E, best_pair, best_word
     end
     k += 1
     if k >= 100
       currad += 1
+      @info "Increasing radius to $(currad)"
       k = 0
     end
-    x = _random_element(G; radius = currad)
-    y = _random_element(G; radius = currad)
+    x, wx = _random_element(G; radius = currad)
+    rx = length(wx)
+    y, wy = _random_element(G; radius = currad)
+    ry = length(wy)
     if !is_semisimple_biproximal(x) || !is_semisimple_biproximal(y)
+      k = k - 1
       continue
     end
-    fl, E = can_compute_bound(x, y)
-    if fl && E < best_E
+    fl, E = can_compute_biproximal_bound(x, y)
+    #@info fl
+    if !fl
+      continue
+    end
+    if fl && E * max(rx, ry) < best_E
       best_pair = x, y
-      best_E = E
-      stab = 0
+      best_E = E * max(rx, ry)
+      best_EE = E
+      best_word = (wx, wy)
+      #@info best_E, max(estimate_bound(x) * rx, estimate_bound(y) * ry)
+      _stab = 0
     else
-      stab += 1
+      _stab += 1
     end
   end
 end

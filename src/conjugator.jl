@@ -47,10 +47,10 @@ function _random_conjugator(G, x; prec = 32, maxrad = 10)
     end
 
     if currad > maxrad
-      return false, x
+      return false, x, 0
     end
 
-    b = _random_element(G; radius = currad)
+    b, rb = _random_element(G; radius = currad)
 
     bc = base_ring(G) isa EmbeddedNumField ? CC.(Qb.(matrix(b))) : CC.(matrix(b))
     bci = base_ring(G) isa EmbeddedNumField ? CC.(Qb.(matrix(inv(b)))) : CC.(matrix(inv(b)))
@@ -59,9 +59,9 @@ function _random_conjugator(G, x; prec = 32, maxrad = 10)
       continue
     end
  
-    return true, b
+    return true, b, rb
   end
-  return false, g
+  return false, g, 0
 end
 
 function conjugator_bound(x, b)
@@ -78,26 +78,31 @@ function conjugator_algorithm(G::MatrixGroup)
   currad = 1
   best_E = typemax(Int)
   best_pair = (one(G), one(G))
+  wx = nothing
+  wb = nothing
   while true
     if stab >= stabbound
-      return best_E, best_pair
+      return best_E, best_pair, (wx, wb)
     end
     k += 1
     if k >= 100
       currad += 1
       k = 0
     end
-    x = _random_element(G; radius = currad)
+    x, wx = _random_element(G; radius = currad)
+    rx = length(wx)
     if !is_semisimple_biproximal(x)
       continue
     end
-    fl, b = _random_conjugator(G, x)
+    fl, b, wb = _random_conjugator(G, x)
+    rb = length(wb)
     if !fl
       continue
     end
-    E = conjugator_bound(x, b)
+    E = max(rx, 2*rb + rx) * conjugator_bound(x, b)
     if fl && E < best_E
       best_pair = x, b
+      best_word = wx, wb
       best_E = E
       stab = 0
     else
