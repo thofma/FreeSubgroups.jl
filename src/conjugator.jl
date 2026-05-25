@@ -52,6 +52,10 @@ function _random_conjugator(G, x; prec = 32, maxrad = 10)
 
     b, rb = _random_element(G; radius = currad)
 
+    if !can_compute_biproximal_bound(x, x^b)[1]
+      continue
+    end
+
     bc = base_ring(G) isa EmbeddedNumField ? CC.(Qb.(matrix(b))) : CC.(matrix(b))
     bci = base_ring(G) isa EmbeddedNumField ? CC.(Qb.(matrix(inv(b)))) : CC.(matrix(inv(b)))
 
@@ -61,32 +65,50 @@ function _random_conjugator(G, x; prec = 32, maxrad = 10)
  
     return true, b, rb
   end
-  return false, g, 0
+  return false, x, 0
 end
 
-function conjugator_bound(x, b)
+function bound_conjugator(x::MatElem, b::MatElem)
+  K = base_ring(x)
+  G = GL(nrows(x), K)
+  return bound_conjugator(G(x), G(b))
+end
+
+function bound_conjugator(x::MatGroupElem, b::MatGroupElem)
   d = nrows(x)
   y = x^b
   del, ex, eX, ey, eY = delta(x, y)
-  l = Int(ceil(max(Ebound(d, del, ex), Ebound(d, del, eX))))
+  l = Int(ceil(max(Ebound(d, del, onorm(x), ex), Ebound(d, del, onorm(inv(x)), eX))))
 end
 
-function conjugator_algorithm(G::MatrixGroup)
-  stabbound = 10
+"""
+    find_free_pair_conjugator(G::MatrixGroup)
+
+Given a not solvable-by-finite matrix group, return `(x, b), (wx, wb), l`,
+where `x` and `y = x^b` are elements of `G`, such that `<x^l, y^l>` is a
+non-abelian free subgroup of `G`. The elements `wx, wb` are words expressing
+`x` and `b` in the generators of `G`.
+"""
+function find_free_pair_conjugator(G::MatrixGroup; startrad = 5, stab = 5)
+  stabbound = stab
   stab = 0
   k = 0
-  currad = 1
+  currad = startrad
   best_E = typemax(Int)
+  bestb = nothing
   best_pair = (one(G), one(G))
+  knownpairs = Set{Tuple{elem_type(G), elem_type(G)}}()
   wx = nothing
   wb = nothing
+  @vprintln :FreeSubgroups 1 "conjugator: looking for random biproximal element of radius $(currad)"
   while true
     if stab >= stabbound
-      return best_E, best_pair, (wx, wb)
+      return best_pair, (wx, wb), bestb
     end
     k += 1
     if k >= 100
       currad += 1
+      @vprintln :FreeSubgroups 1 "conjugator: increasing radius to $(currad)"
       k = 0
     end
     x, wx = _random_element(G; radius = currad)
@@ -95,31 +117,50 @@ function conjugator_algorithm(G::MatrixGroup)
       continue
     end
     fl, b, wb = _random_conjugator(G, x)
-    rb = length(wb)
+    wb = map_word(wb, gens(parent(wx)))
+    if (x, b) in knownpairs
+      continue
+    end
+    push!(knownpairs, (x, b))
     if !fl
       continue
     end
-    E = max(rx, 2*rb + rx) * conjugator_bound(x, b)
+    rb = length(wb)
+    conb = bound_conjugator(x, b)
+    E = max(rx, 2*rb + rx) * conb
     if fl && E < best_E
       best_pair = x, b
       best_word = wx, wb
+      bestb = conb
       best_E = E
       stab = 0
+      @vprintln :FreeSubgroups 1 "conjugator: found a better pair, new best total bound: $(best_E)"
     else
       stab += 1
     end
   end
 end
 
-function conjugator_algorithm(G::MatrixGroup{AbsSimpleNumFieldElem})
+function find_free_pair_conjugator(G::MatrixGroup{AbsSimpleNumFieldElem})
   k = base_ring(G)
   e = real_embeddings(k)
   E, = Hecke.embedded_field(k, e[1])
   GE = matrix_group(E, degree(G), [E.(matrix(g)) for g in gens(G)])
-  return conjugator_algorithm(GE)
+  (x, b), (wx, wb), l = find_free_pair_conjugator(GE)
+  return ((G(map_entries(z -> z.element, matrix(x)); check = false), G(map_entries(z -> z.element, matrix(b)); check = false)),
+          (wx, wb),
+          l)
 end
 
-# 
+function find_free_pair_conjugator(G::MatrixGroup{QQBarFieldElem})
+  k, ktoQQbar = number_field(QQ, reduce(vcat, [Hecke._eltseq(matrix(g)) for g in gens(G)]))
+  Gk = matrix_group(k, degree(G), [preimage.(ktoQQbar, matrix(g)) for g in gens(G)])
+  (x, b), (wx, wb), l = find_free_pair_conjugator(Gk)
+  return ((G(ktoQQbar.(matrix(x)); check = false), G(ktoQQbar.(matrix(b)); check = false)),
+          (wx, wb),
+          l)
+end
+
 # julia> k, a = quadratic_field(2)
 # (Real quadratic field defined by x^2 - 2, sqrt(2))
 # 
@@ -127,4 +168,4 @@ end
 # Matrix group of degree 3
 #   over real quadratic field defined by x^2 - 2
 # 
-# julia> FreeSubgroups.conjugator_algorithm(G)
+# julia> FreeSubgroups.find_free_pair_conjugator(G)

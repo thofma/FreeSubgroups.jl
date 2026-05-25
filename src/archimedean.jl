@@ -11,38 +11,43 @@ function isolated_biproximal_eigenvalues_sorted_by_absolute_value(g; prec = 64)
   if !_is_semisimple(g)
     return false
   end
-  while true
-    if prec > 2^12
-      # precision is getting too large, something might be ood
-      break
-    end
-    set_precision!(Balls, prec)
-    local r
-    try 
-      r = eigenvalues(CC, g)
-    catch e
-      if e isa ErrorException && startswith(e.msg, "unable")
-        prec *= 2
-        continue
+  if is_squarefree(characteristic_polynomial(g))
+    while true
+      if prec > 2^12
+        # precision is getting too large, something might be ood
+        break
       end
-      rethrow(e)
+      set_precision!(Balls, prec)
+      local r
+      try 
+        r = roots(CC, minimal_polynomial(g))
+      catch e
+        if e isa ErrorException && startswith(e.msg, "unable")
+          prec *= 2
+          continue
+        end
+        rethrow(e)
+      end
+      d = length(r)
+      @assert is_pairwise(!overlaps, r)
+      rabs = abs.(r)
+      sort!(r; by = abs, rev = true)
+      if all(i -> rabs[1] > rabs[i], 2:length(rabs)) && all(i -> rabs[i] > rabs[end], 1:length(rabs)-1)
+        set_precision!(Balls, oldprec)
+        return r
+      end
+      prec = 2 * prec
     end
-    if length(r) < d
-      return false
-    end
-    @assert is_pairwise(!overlaps, r)
-    rabs = abs.(r)
-    sort!(r; by = abs, rev = true)
-    if all(i -> rabs[1] > rabs[i], 2:length(rabs)) && all(i -> rabs[i] > rabs[end], 1:length(rabs)-1)
-      set_precision!(Balls, oldprec)
-      return r
-    end
-    prec = 2 * prec
   end
   # have to do it precisely
-  rr = eigenvalues(algebraic_closure(QQ), g)
-  rrabs = abs.(rr)
-  p = sortperm(rrabs; rev = true )
+  rr = reduce(vcat, [[(r, e) for r in roots(algebraic_closure(QQ), h)] for (h, e) in factor_squarefree(characteristic_polynomial(g))])
+  d = nrows(g)
+  rrabs = (x -> (abs(x[1]), x[2])).(rr)
+  p = sortperm(rrabs; rev = true, by = x -> x[1] )
+  rrabs = rrabs[p]
+  if !((rrabs[1][2] == 1) && (rrabs[1][1] > rrabs[2][1]) && (rrabs[end-1] > rrabs[end]) && (rrabs[end][2] == 1))
+    return false
+  end
   rr = rr[p]
   r = CC.(rr)
   rabs = abs.(r)
@@ -56,15 +61,19 @@ function l2norm(vec::Vector{T}) where {T <: Union{RealFieldElem, ComplexFieldEle
   if !is_nonnegative(d)
     # throw an error indicating that we have not enough precision to determine
     # the norm
-    throw(LowPrecisionError)
+    throw(LowPrecisionError())
   end
   return sqrt(d)
 end
 
+_dot(x, y) = abs(sum(x[i]*conj(y[i]) for i in 1:length(x)))
+
+Hecke.conj(x::RealFieldElem) = x
+
 # distance between vec and the hyperplance with normal vector normvec
 function dist_vector_normal_vector(vec::Vector, normvec::Vector)
-  @assert length(vec) == length(vec)
-  ss = abs(dot(vec, normvec)) # abs(sum(vec1[i]*vec2[i] for i in 1:length(vec1)))
+  @assert length(normvec) == length(vec)
+  ss = abs(_dot(vec, normvec))
   return ss/(l2norm(vec) * l2norm(normvec))
 end
 
@@ -82,6 +91,14 @@ acb_to_cc(e, x) = begin
   z = complex_field()()
   @ccall Nemo.libflint.acb_set(z::Ref{ComplexFieldElem}, e(x, precision(Balls))::Ref{AcbFieldElem})::Cvoid
   return z
+end
+
+_embed(::QQField, k::AbsSimpleNumField) = k
+
+function _embed(E::EmbeddedAbsSimpleNumField, k::AbsSimpleNumField)
+  K = number_field(E)
+  e = hom(K, k, roots(k, defining_polynomial(K); max_roots = 1)[1])
+  return x -> e(data(x))
 end
 
 # Return (v, lambda, H), where
@@ -109,10 +126,11 @@ function archimedean_eigenspace_data(mat)
   K, KtoQQbar = QQ[lam[1]]
   lamK = KtoQQbar\(lam[1])
   # @info "" lam 
-  es = eigenspace(map_entries(K, mat), KtoQQbar\(lam[1]))
-  mu = change_base_ring(K, minpoly(mat); cached = false)
+  e = _embed(base_ring(mat), K)
+  es = eigenspace(map_entries(e, mat), KtoQQbar\(lam[1]))
+  mu = map_coefficients(e, minpoly(mat); cached = false)
   g = divexact(mu, gen(parent(mu)) - lamK)
-  Es = kernel(g(mat)) # the sum of the other eigenspaces
+  Es = kernel(g(map_entries(e, mat))) # the sum of the other eigenspaces
   @assert nrows(Es) == nrows(mat) - 1
   hs = normal_vector(Es)
   # result over C
@@ -152,4 +170,31 @@ function archimedean_eigenspace_data2(mat)
   #hs = transpose(hs)
   # return result over C
   return CC.(esv), lam, hs
+end
+
+# ||a||_o
+
+_conjugatetranspose(a::QQMatrix) = transpose(a)
+
+_conjugatetranspose(a::AbstractAlgebra.Generic.MatSpaceElem{EmbeddedAbsSimpleNumFieldElem}) = transpose(a)
+
+function onorm(_mat::MatGroupElem)
+  return onorm(matrix(_mat))
+end
+
+function onorm(_mat)
+  mat = _conjugatetranspose(_mat) * _mat
+  CC = complex_field()
+  Qb = algebraic_closure(QQ)
+  # get eigenvalue and top eigenspace over Qb
+  lam = Oscar.roots(Qb, characteristic_polynomial(mat))
+  set_precision!(Balls, 1024) do
+    sort!(lam; by = x -> abs(CC(x)), rev = true)
+  end
+  if !all(i -> abs(CC(lam[1])) > abs(CC(lam[i])), 2:length(lam))
+    @info "interesting example"
+    # have to resort to complicated sorting in QQbar
+    sort!(lam; by = x -> abs(x), rev = true)
+  end
+  return abs(CC(lam[1]))
 end

@@ -74,15 +74,9 @@ function _check_z(g::MatElem, _z::MatElem)
   vgm, vgmt = _compute_vgs(inv(g))
   eps = epsilon(g)
   z = map_entries(complex_field(), _z)
-  @info "" Float64(dist_vector_normal_vector(vg * z, vgt))
-  @info "" 2 * Float64(eps)
-  @info Float64(eps)
   if !(dist_vector_normal_vector(vg * z, vgt) >= 2 * eps)
     return false, vg, vg, vg, vg
   end
-
-  @info "" dist_vector_normal_vector(vgm, vgmt * z)
-  @info "" 2 * lipschitz_const(_z) * eps
 
   if !(dist_vector_normal_vector(vgm, vgmt * z) >= 2 * lipschitz_const(_z) * eps)
     return false, vg, vg, vg, vg
@@ -103,7 +97,6 @@ function _check_b(g::MatElem, z::MatElem, b::MatElem, ax, axbar, Bx, Bxbar)
   lipb = lipschitz_const(b)
   lipz = lipschitz_const(z)
   eps = epsilon(g)
-  @info "" 2 * lipb^2 * lipz * eps
   (dist_vector_normal_vector(ax, Bx) >= 2 * lipb^2 * lipz * eps) || return false
   (dist_vector_normal_vector(axbar, Bxbar) >= 2 * lipb^2 * lipz * eps) || return false
   for u in [ax, axbar]
@@ -115,36 +108,58 @@ function _check_b(g::MatElem, z::MatElem, b::MatElem, ax, axbar, Bx, Bxbar)
   return true
 end
 
-function svd_algorithm(G::MatrixGroup)
-  rad = 2
+"""
+    find_free_pair_svd(G:::MatrixGroup)
+
+Given a not solvable-by-finite matrix group, use the SVD algorithm to find `(x,
+b), (wx, wb)`, where `x` and `y = x^b` are a free pair. The elements `wx, wb`
+are words expressing `x` and `b` in the generators of `G`.
+"""
+function find_free_pair_svd(G::MatrixGroup)
+  rad = 1
   k = 0
+  prec = 64
+  oldprec = precision(Balls)
+  set_precision!(Balls, prec)
   while true
+    k += 1
     if k >= 200
-      @info rad
       rad += 1
       k = 0
     end
 
     gs = []
-    for i in 1:100
-      g, rg = _random_element(G; radius = 10*rad)
-      #@info g
+    for i in 1:10
+      g, rg = _random_element(G; radius = 5*rad)
+      #eps = epsilon(matrix(g))
       push!(gs, (g, rg, epsilon(matrix(g))))
     end
     _, i = findmin(a -> a[3], gs)
     g, rg, eps = gs[i]
 
-    z = rand(gens(G))
-    fl, ax, axbar, Bx, Bxbar = _check_z(g, z)
-    @warn "_check_z succeed: $fl"
-    if !fl
-      continue
-    end
-    b = rand(gens(G))
-    fl = _check_b(g, z, b, ax, axbar, Bx, Bxbar)
-    if fl
-      x = z * g
-      return x, b
+    z, rz = _random_element(G; radius = 2*rad)
+    local fl, ax, axbar, Bx, Bxbar
+    try
+      fl, ax, axbar, Bx, Bxbar = _check_z(g, z)
+      if !fl
+        continue
+      end
+      b, rb = _random_element(G; radius = 1 * rad)
+      fl = _check_b(g, z, b, ax, axbar, Bx, Bxbar)
+      if fl
+        x = z * g
+        rx = map_word(rz, gens(parent(rg))) * rg
+        rb = map_word(rb, gens(parent(rg)))
+        set_precision!(Balls, oldprec)
+        return (x, b), (rx, rb)
+      end
+    catch e
+      if e isa LowPrecisionError
+        prec = prec * 2
+        set_precision!(Balls, prec)
+        continue
+      end
+      rethrow(e)
     end
   end
 end

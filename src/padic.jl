@@ -5,66 +5,31 @@ struct LowPrecision <: Exception end
 
 abs_val(x) = begin @assert valuation(parent(x)(prime(parent(x)))) == 1; QQ(prime(parent(x)))^(-valuation(x)); end
 
-abs_val(x, p) = QQ(p)^(-valuation(x, p))
+abs_val(x, p) = is_zero(x) ? zero(QQ) : QQ(p)^(-valuation(x, p))
 
-#// does sequence contain symmetric gaps?
-#
-#V3IdentifyGaps := function (s)
-#   d := #s;
-#   gap := [s[i] - s[i + 1]: i in [1..d div 2]];
-#   for i in [1..d div 2] do 
-#      one := s[i] - s[i + 1]; 
-#      two := s[d - i] - s[d - i + 1]; 
-#      if one gt 0 and two gt 0 then 
-#          return true, i;
-#      end if;
-#   end for;
-#   // "No gap found";
-#   return false, _;
-#end function;
-#
-#// multiplicative valuation 
-#V3AbsoluteValue := function (f, p)
-#   return p^-Valuation (f);
-#end function;
-#
 function _norm_vector(v, p)
   return maximum([abs_val(x, p) for x in v])
 end
-
-#// norm of vector v 
-#V3NormVector := function (v, p)
-#   return Maximum ([V3AbsoluteValue (v[i], p): i in [1..Degree (v)]]);
-#end function;
 
 function _norm_matrix(m, p)
   return maximum([_norm_vector(v, p) for v in eachrow(m)])
 end
 
-#V3NormMatrix := function (m, p)
-#   vals := [];
-#   for i in [1..Nrows (m)] do 
-#      vals cat:= [V3NormVector (m[i], p): i in [1..Nrows (m)]];
-#   end for;
-#   return Maximum (vals);
-#end function;
-#
-#// distance between spaces A and R 
-#
+# distance between spaces A and R 
 function distance_of_spaces(A, B)
   # A, R matrices over Qq
   @assert nrows(A) + nrows(B) == ncols(A)
   ell = nrows(A)
 
   m = minors(A, ell)
-  if !(maximum(valuation.(m)) < precision(base_ring(A)))
+  if !(minimum(valuation.(m)) < precision(base_ring(A)))
     throw(LowPrecision())
   end
   a = maximum(abs_val.(m))
 
   ell = nrows(B)
   m = minors(B, ell)
-  if !(maximum(valuation.(m)) < precision(base_ring(B)))
+  if !(minimum(valuation.(m)) < precision(base_ring(B)))
     throw(LowPrecision())
   end
   b = maximum(abs_val.(m))
@@ -78,51 +43,6 @@ function distance_of_spaces(A, B)
   return abs_val(d)/(a * b)
 end
 
-#V3DistanceOfSpaces := function (A, R)
-#   assert Dimension (A) + Dimension (R) eq Degree (Generic (A));
-#
-#   p := Prime (BaseRing (A));
-#   B := Basis (A);
-#   BA := Matrix (B);
-#   ell := #B;
-#   minors := Minors (BA, ell);
-#   a := Maximum ([V3AbsoluteValue (x, p): x in minors]);
-#
-#   B := Basis (R);
-#   BR := Matrix (B);
-#   ell := #B;
-#   minors := Minors (BR, ell);
-#   r := Maximum ([V3AbsoluteValue (x, p): x in minors]);
-#
-#   J := VerticalJoin (BA, BR);
-#   det := V3AbsoluteValue (Determinant (J), p);
-#
-#   return det / (a * r);
-#end function;
-#
-#// U contains subspaces of vector spaces defined over various finite 
-#// extensions of p-adic field. Embed the spaces in splitting field S 
-#
-#EmbedInSplittingField := function (S, U) 
-#   VS := VectorSpace (S, Degree (Rep (U)));
-#   return [sub<VS | [VS!y : y in Basis (u)]>: u in U];
-#   // return [sub<VS | [y : y in Basis (u)]>: u in U];
-#  // return [sub<VS | [[S!x : x in Eltseq (y)]: y in Basis (u)]>: u in U];
-#end function;
-#
-#// write down A and R spaces 
-#V3MyEigenspaces := function (S, m, EV, i0)
-#   I := m^0;
-#   d := Nrows (m);
-#   U := [Nullspace ((m - EV[i] * I)^d): i in [1..i0]];
-#   U := EmbedInSplittingField (S, U);
-#   U1 := [Nullspace ((m - EV[i] * I)^d): i in [i0 + 1..#EV]];
-#   U1 := EmbedInSplittingField (S, U1);
-#   return &+U, &+U1;
-#end function;
-#
-#// g is rational matrix; work in Q_p 
-#
 function _eigenspaces(x, Qq, ev, i0)
   d = nrows(x)
   I = x^0
@@ -130,8 +50,6 @@ function _eigenspaces(x, Qq, ev, i0)
   xq = change_base_ring(Qq, matrix(x))
   U  = reduce(vcat, [kernel((xq - ev[i]*Iq); side = :left) for i in 1:i0])
   U1 = reduce(vcat, [kernel((xq - ev[i]*Iq); side = :left) for i in i0 + 1:d])
-  #@info nrows(U)
-  #@info nrows(U1)
   if nrows(U) + nrows(U1) < d
     throw(LowPrecision())
   end
@@ -139,50 +57,19 @@ function _eigenspaces(x, Qq, ev, i0)
   return U, U1
 end
 
-#V3MyEigenvalues := function (g, p: Precision := 1000)
-#   F := pAdicField (p, Precision);
-#   d := Nrows (g);
-#   MA := MatrixAlgebra (F, d);
-#   m := MA!g;
-#   cp := CharacteristicPolynomial (m);
-#   S := SplittingField (cp);
-#   P<x> := PolynomialRing (S);
-#   f := P!cp;
-#   roots := Roots (f);
-#   roots := [x : x in roots];
-#   valuation := [AbsoluteValue (Valuation (r[1])): r in roots];
-#   ParallelSort (~valuation, ~roots);
-#   Reverse (~valuation); Reverse (~roots);
-#   return valuation, roots, m, S;
-#end function;
-#
-#// is there a symmetric gap?
-#V3IsGoodElement := function (mat, p: Precision := 1000) 
-#   val, ev, x := V3MyEigenvalues (mat, p: Precision := Precision);
-#   flag, i0 := V3IdentifyGaps (val);
-#   return flag, val;
-#end function;
-#
-#// compute delta; input are rational matrices mat and b
-#// work in Q_p 
-
 function compute_delta(x, b, p; prec)
   d = nrows(x)
-  # while true
   Qq, eigvalsx = _compute_qadic_roots(charpoly(matrix(x)), p; prec)
   @assert issorted(eigvalsx, by = abs_val, rev = true)
   fl, i0 = _identify_gaps(abs_val.(eigvalsx))
   @assert fl
-  #@info "" i0
   Ux, Ux1 = _eigenspaces(x, Qq, eigvalsx, i0)
   @assert nrows(Ux) + nrows(Ux1) == d
   xm1 = inv(x)
-  #@info iszero.(eigvalsx)
   eigvalsm1 = [inv(e) for e in reverse(eigvalsx)]
   @assert issorted(eigvalsm1, by = abs_val, rev = true)
   Uxm1, Uxm11 = _eigenspaces(xm1, Qq, eigvalsm1, i0)
   @assert nrows(Uxm1) + nrows(Uxm11) == d
-  #@info "i0", i0
   bb = matrix(b)
   Uxb = Ux * bb
   Ux1b = Ux1 * bb
@@ -210,11 +97,11 @@ function compute_delta(x, b, p; prec)
 end
 
 function L_value(x, b, p; prec = 10)
-  prec = 10
+  prec = 100
   d = nrows(x)
   while true
-    if prec > 2^20
-      error("Precision exceeding 2^20, something is off?")
+    if prec > 2^10
+      return false, -1
     end
     try
       Qq, delta, delta_x, eigvalsx = compute_delta(x, b, p; prec)
@@ -225,8 +112,10 @@ function L_value(x, b, p; prec = 10)
       @assert fl
       alpha = QQ(p)^-(vall[i0] - vall[i0 + 1])
       @assert alpha == val[i0]/val[i0 + 1]
-      return Int(ceil(valuation(N^(nrows(x) - 2)/(delta * delta_x), p)//valuation(alpha, p)))
+      return true, Int(ceil(valuation(N^(nrows(x) - 2)/(delta * delta_x), p)//valuation(alpha, p)))
     catch e
+      #@info "here"
+      #rethrow(e)
       if e isa LowPrecision
         prec *= 2
         continue
@@ -236,98 +125,104 @@ function L_value(x, b, p; prec = 10)
   end
 end
 
-#// first bound from Theorem 16 
-function compute_bound(x, b, p)
-  l1 = L_value(x, b, p)
-  l2 = L_value(x^-1, b, p)
-  l3 = L_value(x^b, b, p)
-  l4 = L_value((x^-1)^b, b, p)
-  return max(l1, l2, l3, l4)
+function can_compute_bound_conjugator_padic(x, b, p)
+  fl, l1 = L_value(x, b, p)
+  !fl && return false, -1
+  fl, l2 = L_value(x^-1, b, p)
+  !fl && return false, -1
+  fl, l3 = L_value(inv(b)*x*b, b, p)
+  !fl && return false, -1
+  fl, l4 = L_value(inv(b) * (x^-1)*b, b, p)
+  !fl && return false, -1
+  return true, max(l1, l2, l3, l4)
 end
 
+function bound_conjugator_padic(x, b, p)
+  fl, l = can_compute_bound_conjugator_padic(x, b, p)
+  if !fl
+    error("Could not verify that bound exists")
+  end
+  return l
+end
 
-#// second bound from Corollary 19 (draft 20 Feb 2026) 
-#H_Bound := function (mat, b, p: Precision := 1000)
-#   d := Nrows (mat);
-#   val, ev, x := V3MyEigenvalues (mat, p: Precision := Precision);
-#   flag, i0 := V3IdentifyGaps (val);
-#   assert flag;
-#
-#   EV := [ev[i][1]: i in [1..#ev]];
-#   C := BaseRing (Parent (EV[1]));
-#   b := Matrix (C, b);
-#
-#   v := Log (p, V3NormMatrix (x, p));
-#   vm1 := Log (p, V3NormMatrix (x^-1, p));
-#   vb := Log (p, V3NormMatrix (b^-1 * x * b, p));
-#   vbm1 := Log (p, V3NormMatrix (b^-1 * (x^-1) * b, p));
-#
-#   delta := V3ComputeDelta (mat, b, p: Precision := Precision);
-#   F := pAdicField (p, Precision);
-#   // fix 
-#   v_delta := V3AbsoluteValue (F!delta, p);
-#
-#   max := Maximum (v + vm1, vb + vbm1); 
-#   // fix
-#   v_i0 :=  V3AbsoluteValue (EV[i0], p) - V3AbsoluteValue (EV[i0 + 1], p);
-#   // fix 
-#   v_di0 := V3AbsoluteValue (EV[d - i0], p) - V3AbsoluteValue (EV[d - i0 + 1], p);
-#   min := Minimum (v_i0, v_di0);
-#   return Ceiling (((d - 2) * max + 4 * v_delta)/  min);
-#end function;
+"""
+    find_free_pair_conjugator_padic(G::MatrixGroup)
 
-#// G \leq GL(d, Q) NOT defined over Z 
-#// return [<x, b, b, H>] where <x^ell, (x^b)^ell> is free  for ell >= b or ell >= H
-#
-function version3(G; min_word_length = 1, max_word_length = 10, number_good = 1, number_random = 100, start_precision = 1000)
-  # not defined over Z?
-
-#   "range of length", min_word_length, max_word_length;
-  d = degree(G)
-  _gens = vcat(gens(G), inv.(gens(G)))
-  m = length(_gens)
-  Q = free_group(m)
-  nmr = 0
-  words = [rand_pseudo(Q; radius = max_word_length) for _ in 1:number_random]
+Given a not solvable-by-finite matrix group, return `(x, b), (wx, wb), l`,
+where `x` and `y = x^b` are elements of `G`, such that `<x^l, y^l>` is a
+non-abelian free subgroup of `G`. The elements `wx, wb` are words expressing
+`x` and `b` in the generators of `G`.
+"""
+function find_free_pair_conjugator_padic(G::MatrixGroup; startrad = 5, stab = 50)
+  stabbound = stab
+  stab = 0
+  k = 0
+  currad = startrad
+  best_E = typemax(Int)
+  bestb = nothing
+  best_pair = (one(G), one(G))
+  knownpairs = Set{Tuple{elem_type(G), elem_type(G)}}()
+  p = -1
+  wx = nothing
+  wb = nothing
+  @vprintln :FreeSubgroups 1 "conjugator: looking for random biproximal element of radius $(currad)"
   while true
-    w = rand(words)
-    x = map_word(w, _gens)
-    #f = characteristic_polynomial(matrix(mat))
-    #if !is_squarefree(f)
-    #  continue
-    #end
+    if stab >= stabbound
+      return best_pair, (wx, wb), bestb
+    end
+    k += 1
+    if k >= 100
+      currad += 1
+      @vprintln :FreeSubgroups 1 "conjugator: increasing radius to $(currad)"
+      k = 0
+    end
+    x, wx = _random_element(G; radius = currad)
+    rx = length(wx)
+
     fl, p = has_p_with_symmetric_gap_in_eigenvalues(x)
+    b, wb = _random_element(G; radius = currad)
+
+    if (x, b) in knownpairs
+      continue
+    end
+
+    push!(knownpairs, (x, b))
+
     if !fl
       continue
     end
 
-    while true
-      b = map_word(rand_pseudo(Q; radius = max_word_length), _gens)
-      y = x^b
-      bound = compute_bound(x, b, p);
-      return bound, (x, b)
+    rb = length(wb)
+    fl, conb = can_compute_bound_conjugator_padic(x, b, p)
+    if !fl
+      continue
     end
-    return mat, p
+    wb = map_word(wb, gens(parent(wx)))
+
+    E = max(rx, 2*rb + rx) * conb
+    if fl && E < best_E
+      best_pair = x, b
+      best_word = wx, wb
+      bestb = conb
+      best_E = E
+      stab = 0
+      @vprintln :FreeSubgroups 1 "conjugator: found a better pair, new best total bound: $(best_E)"
+    else
+      stab += 1
+    end
   end
 end
 
-padic_algorithm(G; kw...) = version3(G; kw...)
-
 function _root_valuations(f, p)
-  #@info f
   r = Oscar.GaloisGrp.valuation_of_roots(f, p)
-  #@info r
   res = QQFieldElem[]
-  #@info r
   d = lcm([denominator(v) for (v,_) in r])
   for (v, c) in r
     for _ in 1:c
-      push!(res, QQ(p)^(ZZ(-1 * d * -v))) # fix the sign
+      push!(res, QQ(p)^(ZZ(d * -v))) # fix the sign
     end
   end
-  #res = abs.(res)
   sort!(res; rev = true)
-  #@info res
   return res
 end
 
@@ -394,9 +289,12 @@ function _compute_qadic_roots(f, p; prec = 100)
       end
     end
     aa = elem_in_nf(a)
-    #@info a
-    #@info r
-    h = parent(g)(inv(basis_matrix([aa^i for i in 0:degree(K) - 1]))[2, :]) 
+    # gen(K) expressed as a polynomial in a
+    if degree(K) == 1
+      h = one(parent(g)) * coeff(gen(K), 0)
+    else
+      h = parent(g)(inv(basis_matrix([aa^i for i in 0:degree(K) - 1]))[2, :]) 
+    end
     @assert h(aa) == gen(K)
     @assert all(is_zero, g.(h.(r)))
     append!(rts, h.(r))
@@ -411,25 +309,6 @@ function _compute_qadic_roots(f, p; prec = 100)
   sort!(rts, by = valuation)
   return Qq, rts
 end
-
-
-#
-#V3MyEigenvalues := function (g, p: Precision := 1000)
-#   F := pAdicField (p, Precision);
-#   d := Nrows (g);
-#   MA := MatrixAlgebra (F, d);
-#   m := MA!g;
-#   cp := CharacteristicPolynomial (m);
-#   S := SplittingField (cp);
-#   P<x> := PolynomialRing (S);
-#   f := P!cp;
-#   roots := Roots (f);
-#   roots := [x : x in roots];
-#   valuation := [AbsoluteValue (Valuation (r[1])): r in roots];
-#   ParallelSort (~valuation, ~roots);
-#   Reverse (~valuation); Reverse (~roots);
-#   return valuation, roots, m, S;
-#end function;
 
 function has_p_with_symmetric_gap_in_eigenvalues(g)
   t = trace(g)
@@ -469,49 +348,24 @@ function has_p_with_symmetric_gap_in_eigenvalues(g)
   end
   return false, 0
 end
-  # return true, p if yes
-  # return false, 0 if no
 
-#
-#   // choose p to define p-adics Q_p 
-#   nmr := 0; 
-#   words := RandomWords (Q, min_word_length, max_word_length, NumberRandom);
-#   repeat 
-#      w := Random (words);
-#      mat := Evaluate (w, gens);
-#      trace := Trace (mat);
-#      B := PrimeBasis (Denominator (trace));
-#      Exclude (~B, 2);
-#      if #B ne 0 then p := Random (B); else p := 2; end if;
-#      nmr +:= 1;
-#   until p ne 2 or nmr gt NumberRandom * 10;
-#   if nmr gt NumberRandom * 10 then error "failed to choose p"; end if;
-#
-#   "Define p-adic field for p = ", p;
-#
-#   w := Random (words);
-#   b := Evaluate (w, gens);
-#
-#   Len := [min_word_length .. max_word_length];
-#   Good := [];
-#   for k in Len do
-#      "Process word length k = ", k;
-#      words := RandomWords (Q, k, k, NumberRandom);
-#      mats := [Evaluate (w, gens): w in words];
-#      "Number of words of length ", k , " we consider is ", #mats;
-#      for i in [1..#mats] do
-#         mat := mats[i];
-#         flag, val := V3IsGoodElement (mat, p: Precision := Precision);
-#         if flag then 
-#            "found good element", val; 
-#             bound := V3Bound (mat, b, p: Precision := Precision);
-#             "First bound for power of element is ", bound;
-#             h_bound := H_Bound (mat, b, p: Precision := Precision);
-#             Append (~Good, <mat, b, bound, h_bound>);
-#             "H bound for power of element is ", bound;
-#             if #Good ge NumberGood then break k; end if;
-#         end if;
-#      end for;
-#   end for;
-#   return Good;
-#end function;
+function find_free_pair_conjugator_padic(G::MatrixGroup{AbsSimpleNumFieldElem})
+  k = base_ring(G)
+  e = real_embeddings(k)
+  E, = Hecke.embedded_field(k, e[1])
+  GE = matrix_group(E, degree(G), [E.(matrix(g)) for g in gens(G)])
+  (x, b), (wx, wb), l = find_free_pair_conjugator_padic(GE)
+  return ((G(map_entries(z -> z.element, matrix(x)); check = false), G(map_entries(z -> z.element, matrix(b)); check = false)),
+          (wx, wb),
+          l)
+end
+
+function find_free_pair_conjugator_padic(G::MatrixGroup{QQBarFieldElem})
+  k, ktoQQbar = number_field(QQ, reduce(vcat, [Hecke._eltseq(matrix(g)) for g in gens(G)]))
+  Gk = matrix_group(k, degree(G), [preimage.(ktoQQbar, matrix(g)) for g in gens(G)])
+  (x, b), (wx, wb), l = find_free_pair_conjugator_padic(Gk)
+  return ((G(ktoQQbar.(matrix(x)); check = false), G(ktoQQbar.(matrix(b)); check = false)),
+          (wx, wb),
+          l)
+end
+
