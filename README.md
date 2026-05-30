@@ -1,8 +1,11 @@
 # FreeSubgroups
 
 `FreeSubgroups` is a Julia package for finding and certifying non-abelian free
-subgroups in matrix groups. It is built on top of `Oscar` and combines several
-complementary strategies:
+subgroups in matrix groups using the methods from
+
+> Emmanuel Breuillard, B. Eick, D. Holt, T. Hofmann and E. A. O’Brien. *Constructing free subgroups of matrix groups* 
+
+It is built on top of `Oscar` and combines several complementary strategies:
 
 - rigorous archimedean bounds for biproximal pairs,
 - rigorous conjugator bounds in the archimedean and p-adic settings,
@@ -26,7 +29,7 @@ Then load the package with:
 using FreeSubgroups
 ```
 
-## Main exported functions
+## Main functions
 
 The search routines below assume that the input matrix group is not
 solvable-by-finite. They are randomized, so the specific elements and words may
@@ -34,7 +37,6 @@ change from run to run.
 
 | Function | Purpose | Return value |
 | --- | --- | --- |
-| `can_compute_biproximal_bound(x, y; check = true)` | Test whether a certified biproximal exponent can be proved | `(flag, l)` |
 | `bound_biproximal(x, y)` | Certified exponent for a biproximal pair | integer `l` |
 | `bound_conjugator(x, b)` | Certified exponent for `x` and `x^b` | integer `l` |
 | `bound_conjugator_padic(x, b, p)` | Certified p-adic exponent for `x` and `x^b` | integer `l` |
