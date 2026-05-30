@@ -3,7 +3,7 @@
 `FreeSubgroups` is a Julia package for finding and certifying non-abelian free
 subgroups in matrix groups using the methods from
 
-> Emmanuel Breuillard, B. Eick, D. Holt, T. Hofmann and E. A. O’Brien. *Constructing free subgroups of matrix groups* 
+> Emmanuel Breuillard, B. Eick, D. Holt, T. Hofmann and E. A. O’Brien. *Constructing free subgroups of matrix groups*.
 
 It is built on top of `Oscar` and combines several complementary strategies:
 
@@ -52,8 +52,6 @@ objects `wx`, `wy`, and `wb` are words in the original generators of `G`.
 
 ## Example: bounds and free-pair searches
 
-The following example is adapted directly from the test suite.
-
 ```julia
 using FreeSubgroups
 
@@ -79,12 +77,10 @@ G = matrix_group([A, B])
 ((xk, bk), (wxk, wbk)) = find_free_pair_cartan(G)
 ```
 
-The first three search routines return a certified exponent `l`. The SVD and
-Cartan routines return a candidate pair without such an exponent.
+The first three search routines return an exponent `l`, such that `x^l, y^l` is a free pair. The SVD and
+Cartan routines return directly a free pair.
 
 ## Example: cone verification
-
-This example is the `test/pingpong.jl` example.
 
 ```julia
 using FreeSubgroups
@@ -110,8 +106,6 @@ approximation, and the working precision.
 
 ## Example: conjugator bounds
 
-The package includes a Burau-type example constructor.
-
 ```julia
 using FreeSubgroups
 
@@ -119,17 +113,10 @@ A, B, b = burau_representation(t = 17)
 @assert B == inv(b) * A * b
 
 l_arch = bound_conjugator(A, b)
-```
-
-For the p-adic variant, the test suite uses `t = 11` and verifies the exact
-bound:
-
-```julia
-using FreeSubgroups
 
 A11, _, b11 = burau_representation(t = 11)
 
-@assert bound_conjugator_padic(A11, b11, 11) == 3
+l_padic = bound_conjugator_padic(A11, b11, 11)
 ```
 
 ## Utility exports
