@@ -127,7 +127,7 @@ By running
 set_verbosity_level(:FreeSubgroups, 1)
 ```
 
-verbose output is enabled.
+verbose output is enabled. 
 
 ## Utility exports
 
