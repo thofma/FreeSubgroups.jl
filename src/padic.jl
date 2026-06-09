@@ -165,7 +165,7 @@ function find_free_pair_conjugator_padic(G::MatrixGroup; startrad = 5, stab = 50
   p = -1
   wx = nothing
   wb = nothing
-  @vprintln :FreeSubgroups 1 "conjugator: looking for random biproximal element of radius $(currad)"
+  @vprintln :FreeSubgroups 1 "p-adic conjugator: looking for random biproximal element of radius $(currad)"
   while true
     if stab >= stabbound
       return best_pair, (wx, wb), bestb
@@ -173,7 +173,7 @@ function find_free_pair_conjugator_padic(G::MatrixGroup; startrad = 5, stab = 50
     k += 1
     if k >= 100
       currad += 1
-      @vprintln :FreeSubgroups 1 "conjugator: increasing radius to $(currad)"
+      @vprintln :FreeSubgroups 1 "p-adic conjugator: increasing radius to $(currad)"
       k = 0
     end
     x, wx = _random_element(G; radius = currad)
@@ -206,7 +206,7 @@ function find_free_pair_conjugator_padic(G::MatrixGroup; startrad = 5, stab = 50
       bestb = conb
       best_E = E
       stab = 0
-      @vprintln :FreeSubgroups 1 "conjugator: found a better pair, new best total bound: $(best_E)"
+      @vprintln :FreeSubgroups 1 "p-adic conjugator: found a better pair, new best total bound: $(best_E)"
     else
       stab += 1
     end
@@ -254,7 +254,8 @@ function _compute_qadic_roots(f, p; prec = 100)
   fminscaled = fmin(gen(parent(fmin))/dd) * dd^degree(fmin)
   l = 1
   for (g, _) in factor(fminscaled)
-    OK = maximal_order(g)
+    #OK = maximal_order(g)
+    OK = pmaximal_overorder(equation_order(g), p)
     l = lcm(l, lcm([f for (f, e) in prime_decomposition_type(OK, p)]))
   end
 
@@ -263,7 +264,8 @@ function _compute_qadic_roots(f, p; prec = 100)
   rts = elem_type(Qq)[]
 
   for (g, _) in factor(fminscaled)
-    OK = lll(maximal_order(g))
+    #OK = lll(maximal_order(g))
+    OK = lll(pmaximal_overorder(equation_order(g), p))
     K = Hecke.nf(OK)
     k = 0
     B = Hecke.elem_in_nf.(basis(OK))
@@ -336,7 +338,9 @@ function has_p_with_symmetric_gap_in_eigenvalues(g)
     for (ff, e) in gf
       @assert is_one(e)
       k, = number_field(ff)
-      if is_ramified(maximal_order(k), p)
+      oo = any_order(k)
+      oop = pmaximal_overorder(oo, p)
+      if mod(discriminant(oop), p) == 0 # is_ramified(maximal_order(k), p)
         pbad = true
         break
       end

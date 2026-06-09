@@ -119,6 +119,16 @@ A11, _, b11 = burau_representation(t = 11)
 l_padic = bound_conjugator_padic(A11, b11, 11)
 ```
 
+## Verbose output
+
+By running
+
+```
+set_verbosity_level(:FreeSubgroups, 1)
+```
+
+verbose output is enabled.
+
 ## Utility exports
 
 The package also exports a few helpers that are useful when building examples
