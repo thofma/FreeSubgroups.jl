@@ -123,43 +123,46 @@ function find_free_pair_svd(G::MatrixGroup)
   set_precision!(Balls, prec)
   while true
     k += 1
-    if k >= 200
+    if k >= 10
       rad += 1
+      @vprintln :FreeSubgroups 1 "svd method: increasing radius to $(rad)"
       k = 0
     end
 
     gs = []
     for i in 1:10
-      g, rg = _random_element(G; radius = 5*rad)
+      g, rg = _random_element(G; radius = 100*rad)
       #eps = epsilon(matrix(g))
       push!(gs, (g, rg, epsilon(matrix(g))))
     end
     _, i = findmin(a -> a[3], gs)
     g, rg, eps = gs[i]
 
-    z, rz = _random_element(G; radius = 2*rad)
-    local fl, ax, axbar, Bx, Bxbar
-    try
-      fl, ax, axbar, Bx, Bxbar = _check_z(g, z)
-      if !fl
-        continue
+    for j in 1:5
+      z, rz = _random_element(G; radius = 1*rad)
+      local fl, ax, axbar, Bx, Bxbar
+      try
+        fl, ax, axbar, Bx, Bxbar = _check_z(g, z)
+        if !fl
+          continue
+        end
+        b, rb = _random_element(G; radius = 1 * rad)
+        fl = _check_b(g, z, b, ax, axbar, Bx, Bxbar)
+        if fl
+          x = z * g
+          rx = map_word(rz, gens(parent(rg))) * rg
+          rb = map_word(rb, gens(parent(rg)))
+          set_precision!(Balls, oldprec)
+          return (x, b), (rx, rb)
+        end
+      catch e
+        if e isa LowPrecisionError
+          prec = prec * 2
+          set_precision!(Balls, prec)
+          continue
+        end
+        rethrow(e)
       end
-      b, rb = _random_element(G; radius = 1 * rad)
-      fl = _check_b(g, z, b, ax, axbar, Bx, Bxbar)
-      if fl
-        x = z * g
-        rx = map_word(rz, gens(parent(rg))) * rg
-        rb = map_word(rb, gens(parent(rg)))
-        set_precision!(Balls, oldprec)
-        return (x, b), (rx, rb)
-      end
-    catch e
-      if e isa LowPrecisionError
-        prec = prec * 2
-        set_precision!(Balls, prec)
-        continue
-      end
-      rethrow(e)
     end
   end
 end

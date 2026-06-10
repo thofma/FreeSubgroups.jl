@@ -166,7 +166,13 @@ function find_free_pair_conjugator_padic(G::MatrixGroup; startrad = 5, stab = 50
   wx = nothing
   wb = nothing
   @vprintln :FreeSubgroups 1 "p-adic conjugator: looking for random biproximal element of radius $(currad)"
+  nonewbound = 10 * stabbound
+  nonew = 0
   while true
+    if nonew > nonewbound && bestb !== nothing
+      return best_pair, (wx, wb), bestb
+    end
+
     if stab >= stabbound
       return best_pair, (wx, wb), bestb
     end
@@ -183,24 +189,28 @@ function find_free_pair_conjugator_padic(G::MatrixGroup; startrad = 5, stab = 50
     b, wb = _random_element(G; radius = currad)
 
     if (x, b) in knownpairs
+      nonew += 1
       continue
     end
 
     push!(knownpairs, (x, b))
 
     if !fl
+      nonew += 1
       continue
     end
 
     rb = length(wb)
     fl, conb = can_compute_bound_conjugator_padic(x, b, p)
     if !fl
+      nonew += 1
       continue
     end
     wb = map_word(wb, gens(parent(wx)))
 
     E = max(rx, 2*rb + rx) * conb
     if fl && E < best_E
+      nonew = 0
       best_pair = x, b
       best_word = wx, wb
       bestb = conb
