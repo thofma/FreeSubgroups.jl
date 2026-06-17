@@ -295,7 +295,7 @@ where `x` and `y` are elements of `G`, such that `<x^l, y^l>` is a non-abelian
 free subgroup of `G`. The elements `wx, wy` are words expressing `x` and `y` in
 the generators of `G`.
 """
-function find_free_pair_biproximal(G::MatrixGroup; stab = 5, startrad = 5)
+function find_free_pair_biproximal(G::MatrixGroup; stab = degree(G) > 10 ? 1 : 5, startrad = 5)
   stabbound = stab
   _stab = 0
   k = 0
@@ -325,11 +325,10 @@ function find_free_pair_biproximal(G::MatrixGroup; stab = 5, startrad = 5)
     end
     push!(knownpairs, (x, y))
     if !is_biproximal(x) || !is_biproximal(y)
-      k = k - 1
+      #k = k - 1
       continue
     end
     fl, E = can_compute_biproximal_bound(x, y)
-    #@info fl
     if !fl
       continue
     end

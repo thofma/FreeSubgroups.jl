@@ -118,7 +118,7 @@ function is_b_good(b::QQMatrix, z, ax, axinv, Bx, Bxinv, e, p)
 end
 
 
-function find_free_pair_cartan(G::MatrixGroup; stab = 5, startrad = 5)
+function find_free_pair_cartan(G::MatrixGroup; stab = degree(G) > 10 ? 1 : 5, startrad = 5)
   rad = startrad
   k = 0
   #while true

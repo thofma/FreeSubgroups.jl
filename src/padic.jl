@@ -153,7 +153,7 @@ where `x` and `y = x^b` are elements of `G`, such that `<x^l, y^l>` is a
 non-abelian free subgroup of `G`. The elements `wx, wb` are words expressing
 `x` and `b` in the generators of `G`.
 """
-function find_free_pair_conjugator_padic(G::MatrixGroup; startrad = 5, stab = 50)
+function find_free_pair_conjugator_padic(G::MatrixGroup; startrad = 5, stab = degree(G) > 10 ? 1 : 5)
   stabbound = stab
   stab = 0
   k = 0

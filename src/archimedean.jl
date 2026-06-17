@@ -87,6 +87,19 @@ function normal_vector(A::MatElem)
   return v[:, 1]
 end
 
+function _normal_vector_via_inv(A::MatElem)#{ComplexFieldElem})
+  n = nrows(A)
+  try
+    B = A[:, 1:n]
+    v = inv(B) * A[:, n+1]
+    return true, push!(v, -one(base_ring(A)))
+  catch e
+    return false, elem_type(base_ring(A))[]
+  end
+end
+  
+
+
 acb_to_cc(e, x) = begin
   z = complex_field()()
   @ccall Nemo.libflint.acb_set(z::Ref{ComplexFieldElem}, e(x, precision(Balls))::Ref{AcbFieldElem})::Cvoid
@@ -132,9 +145,8 @@ function archimedean_eigenspace_data(mat)
   g = divexact(mu, gen(parent(mu)) - lamK)
   Es = kernel(g(map_entries(e, mat))) # the sum of the other eigenspaces
   @assert nrows(Es) == nrows(mat) - 1
-  hs = normal_vector(Es)
-  # result over C
-  # find the correct embedding K -> C
+
+  # find the complex embedding
   embs = complex_embeddings(K)
   found = false
   ee = embs[1]
@@ -147,7 +159,18 @@ function archimedean_eigenspace_data(mat)
       found = true
     end
   end
-  return (acb_to_cc.(Ref(ee), es))[1, :], lam, acb_to_cc.(Ref(ee), hs)
+
+  # try something numeric
+  fl, _hs = _normal_vector_via_inv(acb_to_cc.(Ref(ee), Es))
+  if fl
+    hscc = _hs
+  else
+    hs = normal_vector(Es)
+    hscc = acb_to_cc.(Ref(ee), hs)
+  end
+  # result over C
+  # find the correct embedding K -> C
+  return (acb_to_cc.(Ref(ee), es))[1, :], lam, hscc
 end
 
 function archimedean_eigenspace_data2(mat)
