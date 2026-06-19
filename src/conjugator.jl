@@ -77,8 +77,15 @@ end
 function bound_conjugator(x::MatGroupElem, b::MatGroupElem)
   d = nrows(x)
   y = x^b
-  del, ex, eX, ey, eY = delta(x, y)
-  l = Int(ceil(max(Ebound(d, del, onorm(x), ex), Ebound(d, del, onorm(inv(x)), eX))))
+  del, ex, eX, ey, eY, x, X, y, Y = delta(x, y)
+  pp = []
+  for (e, a) in [(ex, x), (eX, X), (ey, y), (eY, Y)]
+    #@info eX
+    _onorm = onorm(a)
+    push!(pp, Ebound(d, del, _onorm, e))
+  end
+  pp = reduce(max, pp)
+  l = Int(ceil(pp))
 end
 
 """
