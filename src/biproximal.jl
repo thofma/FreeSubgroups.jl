@@ -31,54 +31,56 @@ function Oscar.roots(CC::ComplexField, g::PolyRingElem{<: EmbeddedNumFieldElem})
 end
 
 function is_biproximal(g::MatElem)
-  CC = complex_field()
-  d = nrows(g)
   oldprec = precision(Balls)
-  prec = 64
-  if is_squarefree(characteristic_polynomial(g))
-    while true
-      if prec > 2^12
-        # precision is getting too large, something might be ood
-        break
-      end
-      set_precision!(Balls, prec)
-      local r
-      try 
-        r = roots(CC, minimal_polynomial(g))
-      catch e
-        if e isa ErrorException && startswith(e.msg, "unable")
-          prec *= 2
-          continue
+  try
+    CC = complex_field()
+    d = nrows(g)
+    prec = 64
+    if is_squarefree(characteristic_polynomial(g))
+      while true
+        if prec > 2^12
+          # precision is getting too large, something might be ood
+          break
         end
-        rethrow(e)
-      end
-      d = length(r)
-      rabs = abs.(r)
-      # we need to make sure that no two intervals overlap
-      #if any(x -> !(x[1] == x[2]) && overlaps(x[1], x[2]), zip(rabs, rabs))
-      #  # we cannot distinguish between "not enough precision" and
-      #  # "there are two distinct eigenvalues with the same absolute value"
-      #  break
-      #end
-      sort!(r; by = abs, rev = true )
-      if ((abs(r[1]) > abs(r[2])) && (abs(r[d-1]) > abs(r[d]))) 
-        set_precision!(Balls, oldprec)
-        return true
-      else
-        set_precision!(Balls, oldprec)
-        return false
+        set_precision!(Balls, prec)
+        local r
+        try
+          r = roots(CC, minimal_polynomial(g))
+        catch e
+          if e isa ErrorException && startswith(e.msg, "unable")
+            prec *= 2
+            continue
+          end
+          rethrow(e)
+        end
+        d = length(r)
+        rabs = abs.(r)
+        # we need to make sure that no two intervals overlap
+        #if any(x -> !(x[1] == x[2]) && overlaps(x[1], x[2]), zip(rabs, rabs))
+        #  # we cannot distinguish between "not enough precision" and
+        #  # "there are two distinct eigenvalues with the same absolute value"
+        #  break
+        #end
+        sort!(r; by = abs, rev = true )
+        if ((abs(r[1]) > abs(r[2])) && (abs(r[d-1]) > abs(r[d])))
+          return true
+        else
+          return false
+        end
       end
     end
-  end
-  # have to do it precisely
-  rr = reduce(vcat, [[(r, e) for r in roots(algebraic_closure(QQ), h)] for (h, e) in factor_squarefree(characteristic_polynomial(g))])
-  d = nrows(g)
-  rrabs = (x -> (abs(x[1]), x[2])).(rr)
-  sort!(rrabs; rev = true, by = x -> x[1] )
-  if (rrabs[1][2] == 1) && (rrabs[1][1] > rrabs[2][1]) && (rrabs[end-1] > rrabs[end]) && (rrabs[end][2] == 1)
-    return true
-  else
-    return false
+    # have to do it precisely
+    rr = reduce(vcat, [[(r, e) for r in roots(algebraic_closure(QQ), h)] for (h, e) in factor_squarefree(characteristic_polynomial(g))])
+    d = nrows(g)
+    rrabs = (x -> (abs(x[1]), x[2])).(rr)
+    sort!(rrabs; rev = true, by = x -> x[1] )
+    if (rrabs[1][2] == 1) && (rrabs[1][1] > rrabs[2][1]) && (rrabs[end-1] > rrabs[end]) && (rrabs[end][2] == 1)
+      return true
+    else
+      return false
+    end
+  finally
+    set_precision!(Balls, oldprec)
   end
 end
 
@@ -215,7 +217,8 @@ function Ebound(d, delta, onorm, lambdas::Vector)
   RR = parent(delta)
   z = -4*log(delta) # 4*log(delta^-1))
   alpha1, a2 = RR.(alpha1_and_a2(lambdas))
-  return (2 * (d - 2) * log(max(RR(1), inv(sqrt(alpha1) - 1) * onorm* a2^-1)) - 2 * log(delta^2/2))/log(alpha1)
+  # Theorem 3.5: E_a = 2*((d-2)*log(max(1, onorm/((sqrt(alpha1)-1)*|la_2|))) - 2*log(delta^2/2))/log(alpha1)
+  return (2 * (d - 2) * log(max(RR(1), inv(sqrt(alpha1) - 1) * onorm* a2^-1)) - 4 * log(delta^2/2))/log(alpha1)
 end
 
 #function Ebound(d, delta, lambdas::Vector)
@@ -230,50 +233,64 @@ end
 #end
 
 function can_compute_biproximal_bound(x, y; check::Bool = true)
-  if check
-    if !is_biproximal(x) || !is_biproximal(y)
-      error("elements must be biproximal")
-    end
-  end
-  RR = real_field()
-
-  d = nrows(x)
-
+  _require_real_archimedean_input(x)
+  _require_real_archimedean_input(y)
   oldprec = precision(Balls)
-  # compute delta with "high precision"
-  # if not positive, we bail out
-  set_precision!(Balls, 1064)
-  del, ex, eX, ey, eY = delta(x, y)
-  #@info del
-  if !is_positive(del)
+  try
+    if check
+      if !is_biproximal(x) || !is_biproximal(y)
+        error("elements must be biproximal")
+      end
+    end
+    RR = real_field()
+
+    d = nrows(x)
+
+    # first check that delta is positive
+    fl_delta = false
+    for prec0 in (1064, 2048)
+      set_precision!(Balls, prec0)
+      try
+        del = first(delta(x, y))
+        if is_positive(del)
+          fl_delta = true
+          break
+        end
+      catch err
+        err isa LowPrecisionError || rethrow()
+      end
+    end
+    fl_delta || return false, -1
+
+    prec = 64
+    while true
+      if prec > 2^10
+        @error "something off"
+        return false, -1
+      end
+      prec = 2 * prec
+      set_precision!(Balls, prec)
+      try
+        del, ex, eX, ey, eY, x, X, y, Y = delta(x, y)
+        is_positive(del) || continue
+        pp = []
+        for (e, a) in [(ex, x), (eX, X), (ey, y), (eY, Y)]
+          _onorm = onorm(a)
+          push!(pp, Ebound(d, del, _onorm, e))
+        end
+        pp = reduce(max, pp)
+        # need a unique integer after rounding
+        fl, cc = unique_integer(ceil(pp))
+        if fl
+          return true, cc
+        end
+      catch err
+        # increase precision if the norm is still uncertain
+        err isa LowPrecisionError || rethrow()
+      end
+    end
+  finally
     set_precision!(Balls, oldprec)
-    return false, -1
-  end
-
-  oldprec = precision(Balls)
-  prec = 64
-  while true
-    if prec > 2^10
-      @error "something off"
-      return false, -1
-    end
-    prec = 2 * prec
-    set_precision!(Balls, prec)
-    del, ex, eX, ey, eY, x, X, y, Y = delta(x, y)
-    #z = -4*log(del) # 4*log(delta^-1))
-    #println("compute bounds")
-    pp = []
-    for (e, a) in [(ex, x), (eX, X), (ey, y), (eY, Y)]
-      #@info eX
-      _onorm = onorm(a)
-      push!(pp, Ebound(d, del, _onorm, e))
-    end
-    pp = reduce(max, pp)
-    fl, cc = unique_integer(ceil(pp))
-    if fl
-      set_precision!(Balls, oldprec)
-      return true, cc
-    end
   end
 end
 
@@ -296,6 +313,7 @@ free subgroup of `G`. The elements `wx, wy` are words expressing `x` and `y` in
 the generators of `G`.
 """
 function find_free_pair_biproximal(G::MatrixGroup; stab = degree(G) > 10 ? 1 : 5, startrad = 5)
+  _require_real_archimedean_input(G)
   stabbound = stab
   _stab = 0
   k = 0
@@ -347,6 +365,7 @@ function find_free_pair_biproximal(G::MatrixGroup; stab = degree(G) > 10 ? 1 : 5
 end
 
 function find_free_pair_biproximal(G::MatrixGroup{AbsSimpleNumFieldElem})
+  _require_real_archimedean_input(G)
   # just embed into GL_n(R) in any form
   k = base_ring(G)
   e = real_embeddings(k)
@@ -359,6 +378,7 @@ function find_free_pair_biproximal(G::MatrixGroup{AbsSimpleNumFieldElem})
 end
 
 function find_free_pair_biproximal(G::MatrixGroup{QQBarFieldElem})
+  _require_real_archimedean_input(G)
   k, ktoQQbar = number_field(QQ, reduce(vcat, [Hecke._eltseq(matrix(g)) for g in gens(G)]))
   Gk = matrix_group(k, degree(G), [preimage.(ktoQQbar, matrix(g)) for g in gens(G)])
   (x, y), (wx, wy), l = find_free_pair_biproximal(Gk)

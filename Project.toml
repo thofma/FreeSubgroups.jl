@@ -14,8 +14,9 @@ Oscar = "1.7.0"
 Reexport = "1.2.2"
 
 [extras]
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["REPL", "Test"]
+test = ["Random", "REPL", "Test"]

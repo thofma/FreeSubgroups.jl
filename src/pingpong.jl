@@ -221,7 +221,7 @@ of rank 2 using the ping-pong lemma with cones.
 Returns `true` if freeness is successfully verified, `false` otherwise.
 
 # Optional keyword arguments
-- `inc`: radius parameter for cones (default: 1/100 for d≤4, 1/1000 for d≥5)
+- `inc`: radius parameter for cones (default: 1/100 for d≤4, 1/10000 for d≥5)
 - `pow1`: power used to approximate dominant eigenvectors (default: 50)
 - `precision`: bit precision used for vector normalisation (default: 64)
 """
@@ -231,7 +231,7 @@ function verify_free_pair_cones(G, g1, g2, pow::Int;
                  precision::Int = 64)
   d = degree(G)
   if inc == 0
-    inc = d <= 4 ? QQ(1, 100) : QQ(1, 1000)
+    inc = d <= 4 ? QQ(1, 100) : QQ(1, 10000)
   else
     inc = QQ(inc)
   end
