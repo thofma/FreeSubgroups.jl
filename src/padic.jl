@@ -162,7 +162,13 @@ function _padic_slope_spaces(x, p; prec = 100)
     if degree(g) < 1 || is_zero(leading_coefficient(g)) || is_zero(constant_coefficient(g))
       throw(LowPrecision())
     end
-    g = divexact(g, leading_coefficient(g))^m
+    # polynomial powering can also run out of precision
+    g = try
+      divexact(g, leading_coefficient(g))^m
+    catch e
+      e isa DivideError && throw(LowPrecision())
+      rethrow(e)
+    end
     v = QQ(valuation(constant_coefficient(g))) // degree(g)
     # check the Newton slope, including zero approximations
     if !all(i -> valuation(coeff(g, i)) >= (degree(g) - i) * v, 0:degree(g))
