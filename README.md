@@ -3,7 +3,7 @@
 `FreeSubgroups` is a Julia package for finding and certifying non-abelian free
 subgroups in matrix groups using the methods from
 
-> Emmanuel Breuillard, B. Eick, D. Holt, T. Hofmann and E. A. O’Brien. *Constructing free subgroups of matrix groups*.
+> Emmanuel Breuillard, Bettina Eick, Tommy Hofmann, Derek Holt and Eamonn O’Brien. *Constructing free subgroups of matrix groups*. [arXiv:2611.03175](https://arxiv.org/abs/2611.03175), 2026.
 
 It is built on top of `Oscar` and combines several complementary strategies:
 
